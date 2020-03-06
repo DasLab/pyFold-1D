@@ -50,7 +50,6 @@ class Design(object):
 			patt = ['A']
 			
 			self.pattern = ''.join(['A']+['N']*(len(self.secstruct)-1))
-
 		else:
 			self.pattern = pattern
 
@@ -65,7 +64,8 @@ class Design(object):
 		#set sequences to search over
 		self.filter_sequences()
 		self.test()
-		self.plot_best_and_worst()
+		if len(self.sequences) > 0:
+			self.plot_best_and_worst()
 
 	def filter_sequences(self):
 		sequences = get_sequences_for_pattern(self.pattern)
@@ -86,6 +86,8 @@ class Design(object):
 			p_target_i, base_mdl = self.test_design_(sequence)
 			self.target_probabilities.append(p_target_i)
 			self.conformations.append(base_mdl)
+
+		print('Found %d sequences to test' % len(self.sequences))
 
 		idx = np.argsort([-1*x for x in self.target_probabilities]) # to sort highest to lowest
 		self.target_probabilities = [self.target_probabilities[x] for x in idx]

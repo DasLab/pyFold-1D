@@ -38,6 +38,50 @@ def secstruct_to_partner(secstruct):
 
 	return pairs
 
+def partner_to_bp_list(p):
+	# given partner-style array, write list of base pairs.
+	bp_list = []
+	for i,partner in enumerate(p):
+		if i >= 0:
+			if partner > i:
+				bp_list.append([i,int(partner)])
+	return bp_list
+
+def write_dbn_from_partner(p, debug=False):
+	#given partner-style array, writes dot-parens notation string. handles pseudoknots!
+
+	bp_list = partner_to_bp_list(p)
+	stems = parse_stems_from_bps(bp_list)
+
+	dbn = ['.']*len(p)
+
+	delims_L = ['(','[','{','a','b','c']
+	delims_R = [')',']','}','a','b','c']
+
+	if debug: print(stems)
+
+	if len(stems) == 0:
+		return ''.join(dbn)
+	else:
+		for stem in stems:
+			if debug: print(stem)
+			pk_ctr=0
+			if debug: print(stem[0][0], stem[0][1])
+			substring = dbn[stem[0][0]+1:stem[0][1]]
+			if debug: print('ss', ''.join(substring))
+
+			#check to see how many delimiter types exist in between where stem is going to go
+			while delims_L[pk_ctr] in substring or delims_R[pk_ctr] in substring:
+				pk_ctr+=1
+
+			for [i,j] in stem:
+				if debug: print(pk_ctr)
+				dbn[i] = delims_L[pk_ctr]
+				dbn[j] = delims_R[pk_ctr]
+			if debug: print(dbn)
+
+		return ''.join(dbn)
+
 def convert_structure_to_bps(secstruct):
 
 	bps = []
@@ -77,48 +121,64 @@ def convert_structure_to_bps(secstruct):
 
 	return bps
 
-def parse_stems_from_bps(bps):
-	nres = np.max(bps)
-	stems = []
+def parse_stems_from_bps(bps, debug=False):
 
-	while len(bps) > 0:
-		bp = bps[0]
-		bps = bps[1:]
+	if debug: print(bps)
 
-		stem = [bp]
+	if len(bps) == 0:
+		stems = []
+	else:
+		nres = np.max(bps)
+		stems = []
 
-		bp_next = copy(bp)
+		while len(bps) > 0:
+			bp = bps[0]
+			bps = bps[1:]
 
-		# Check outward
-		for i in list(reversed(range(bp[0]))):
-			bp_next[0] -= 1
-			bp_next[1] += 1
-			if len(bps) > 0:
-				gp = find_all([x[0] for x in bps], [bp_next[0]])
-				if len(gp)>0:
-					if bps[gp[0]][1] == bp_next[1]: # found an extension
-						stem.append(copy(bp_next))
-						del bps[gp[0]] # take out of bp list
-					else:
-						break
+			stem = [bp]
 
-		bp_next = copy(bp)
+			if debug: print('stem init', stem)
+			bp_next = copy(bp)
+			if debug: print('bp_next', bp_next)
 
-		#Check inward
-		for i in range(bp[0],nres+1):
-			bp_next[0] += 1
-			bp_next[1] -= 1
-			if len(bps) > 0:
-				gp = find_all([x[0] for x in bps], [bp_next[0]])
-				if len(gp)>0:
-					if bps[gp[0]][1] == bp_next[1]: # found an extension
-						stem = copy(bp_next)+stem
-						del bps[gp[0]] # take out of bp list
-					else:
-						break
+			# Check outward
+			for i in list(reversed(range(bp[0]))):
+				bp_next = [copy(bp_next)[0]-1,copy(bp_next)[1]+1]
 
-		stems.append(stem)
+				if debug: print('next_out', bp_next)
 
+				if len(bps) > 0:
+					gp = find_all([x[0] for x in bps], [bp_next[0]])
+					if len(gp)>0:
+						if bps[gp[0]][1] == bp_next[1]: # found an extension
+							if debug: print('r')
+							stem.append(copy(bp_next))
+							del bps[gp[0]] # take out of bp list
+						else:
+							break
+
+			bp_next = copy(bp)
+
+			#Check inward
+			for i in range(bp[0],nres+1):
+
+
+				bp_next[0] = copy(bp_next)[0]+1
+				bp_next[1] = copy(bp_next)[1]-1
+
+				if debug: print('next_in', bp_next)
+				if len(bps) > 0:
+					gp = find_all([x[0] for x in bps], [bp_next[0]])
+					if len(gp)>0:
+						if bps[gp[0]][1] == bp_next[1]: # found an extension
+							if debug: print('h')
+							stem = [copy(bp_next)]+copy(stem)
+							del bps[gp[0]] # take out of bp list
+						else:
+							break
+			stems.append(stem)
+			if debug: print('stem', stem)
+	if debug: print('stems', stems)
 	return stems
 
 def figure_out_stem_assignment(secstruct):

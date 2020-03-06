@@ -22,7 +22,7 @@ def draw_conformations(conf, structs_per_row = 5):
                 if j_ind > j:
                     plt.plot([j, j_ind],[conf.x[j_ind,i],conf.x[j_ind,i]],c='blue', linewidth=8)
 
-        plt.text(0,n_beads,conf.energies[i])
+        plt.text(0,n_beads,"%.2f" % conf.energies[i])
         
         plt.xlim([-1,n_beads+1])
         plt.ylim([-n_beads,n_beads])
@@ -37,7 +37,7 @@ def draw_traces(conf, boltz_weight=False):
     min_E = np.min(conf.energies)
     for i in range(n_confs):
         if boltz_weight:
-            wt = np.exp(-0.5*(conf.energies[i]+min_E))
+            wt = np.exp(-0.01*(conf.energies[i]+min_E))
         else:
             wt=1
         plt.plot(conf.x[:,i]+np.random.normal(scale=0.1,size=n_beads), linewidth=wt, c='k', alpha=0.5)

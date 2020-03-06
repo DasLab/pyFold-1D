@@ -18,8 +18,10 @@ class Conformation(object):
 		secstruct (str): Secondary structure in dot-parens notation, e.g. '((.))'.
 		sequence (str) (optional): Input sequence (array of 0's and 1's) with 'colors'.
 			Required if you want secstruct's to be enumerated.
-		params (array-like): Energy parameter values for delta, epsilon, etc.
+		params (Parameters class): input custom parameters model (see Parameters doc for how this works.)
 
+	Energy models:
+		''
 	Attributes:
 		x = [Nbeads x Nconformations] all sets of conformations. If no base pairs specified,
 		should get 2^(Nbeads - 1). First position is always 0.
@@ -43,7 +45,8 @@ class Conformation(object):
 
 			self.is_chainbreak, self.secstruct = parse_out_chainbreak(secstruct)
 
-			self.partner = secstruct_to_partner(self.secstruct)
+			#renamed partner to constraint to distinguish from p array.  as this is more an input constraint
+			self.constraint = secstruct_to_partner(self.secstruct)
 			self.stem_assignment = figure_out_stem_assignment(self.secstruct)
 
 			self.N = len(self.secstruct)
@@ -65,7 +68,7 @@ class Conformation(object):
 				self.is_chainbreak, self.sequence = parse_out_chainbreak(sequence)
 
 				self.N = len(self.sequence)
-				self.partner = -1*np.ones([self.N])
+				self.constraint = -1*np.ones([self.N])
 				self.stem_assignment = np.zeros([self.N])
 
 		self.x = []
@@ -77,20 +80,29 @@ class Conformation(object):
 		self.conf_probabilities = []
 		self.bpps = np.zeros([self.N, self.N])
 		self.connectivity_matrices = []
+		self.evaluated = False
+		self.n_conf = 0
+		self.dbn_strings = []
+		self.stems_list = []
 
 	def run(self):
 		self.get_conformations() # enumerate conformations
+		self.n_conf = self.x.shape[1]
+		self.parse_conformations()
+		self.get_connectivity_matrices()
 		self.score() # calculate energies, Z, probabilities
+		self.get_bpp()
 
+		#sort all the things
 		idx = np.argsort(self.energies)
 		self.x = self.x[:,idx]
 		self.d = self.d[:,idx]
 		self.p = self.p[:,idx]
 		self.energies = self.energies[idx]
 		self.conf_probabilities = self.conf_probabilities[idx]
-
-		self.get_bpp()
-		self.get_connectivity_matrices()
+		self.dbn_strings = [self.dbn_strings[x] for x in idx]
+		self.stems_list = [self.stems_list[x] for x in idx]
+		self.connectivity_matrices = [self.connectivity_matrices[x] for x in idx]
 
 	def get_conformations(self):
 
@@ -105,7 +117,7 @@ class Conformation(object):
 		#initialize first bead location
 		x[0,0] = 0
 		d[0,0] = 1
-		p[0,0] = self.partner[0]
+		p[0,0] = self.constraint[0]
 
 		for i in range(1,self.N):
 
@@ -136,7 +148,7 @@ class Conformation(object):
 					p[:,newblock] = copy(p[:,:q])
 					d[i, newblock] = -1
 				x[i] = x[i-1]+d[i]
-				p[i] = self.partner[i]
+				p[i] = self.constraint[i]
 
 			else:
 				q = x.shape[1]
@@ -162,18 +174,18 @@ class Conformation(object):
 						
 						x[i,newblock] = xx
 						d[i,newblock] = dd
-						p[i,newblock] = self.partner[i]
+						p[i,newblock] = self.constraint[i]
 
 			if np.sum(self.stem_assignment) > 0:
 				# Filter trajectories that obey user-inputted pairs: positions at same level
 				#going in opposite directions
-				if self.partner[i] == -1:
+				if self.constraint[i] == -1:
 					continue
-				elif self.partner[i] > i:
+				elif self.constraint[i] > i:
 					continue
 				else:
-					gp_x = np.where(x[i] == x[int(self.partner[i])])
-					gp_d = np.where(d[i] == -1*d[int(self.partner[i])])
+					gp_x = np.where(x[i] == x[int(self.constraint[i])])
+					gp_d = np.where(d[i] == -1*d[int(self.constraint[i])])
 					gp = np.intersect1d(gp_x, gp_d)
 
 					x = x[:,gp]
@@ -243,6 +255,7 @@ class Conformation(object):
 				x, d, p = xnew, dnew, pnew
 
 		self.x, self.d, self.p = x, d, p
+		self.evaluated = True
 
 	def score(self):
 		# Energy in toyfold model
@@ -255,13 +268,34 @@ class Conformation(object):
 		#
 		# Output
 		# E = [Nconformations] energies for each conformation 
+		if not self.evaluated:
+			raise RuntimeError('Not run yet, call .run() for pipeline or .get_conformations() for first step')
 
 		num_bends = score_bends(self.d)
 		num_pairs = score_pairs(self.p)
+		num_stacks = score_stacks(self.stems_list)
 
-		self.energies = self.params.delta * num_bends + self.params.epsilon * num_pairs
+		self.energies = self.params.delta * num_bends + self.params.epsilon * num_pairs + self.params.sigma * num_stacks
+
+		if self.params.gnm:
+			print('Scoring includes GNM elastic energy')
+			self.energies += score_fluctuations(self.connectivity_matrices)
+
 		self.Z = np.sum(np.exp(-1*self.energies))
 		self.conf_probabilities = np.exp(-self.energies)/self.Z
+
+	def parse_conformations(self):
+		# To be run after `get_conformations`. Given filled-out p matrix, gets 
+		# list [length n_conformation] of list [length variable] of stems.
+
+		if not self.evaluated:
+			raise RuntimeError('Not run yet, call .run() for pipeline or .get_conformations() for first step')
+		for m in range(self.n_conf):
+			pm = copy(self.p[:,m])
+			bp_list = partner_to_bp_list(pm)
+			stems = parse_stems_from_bps(bp_list)
+			self.dbn_strings.append(write_dbn_from_partner(pm))
+			self.stems_list.append(stems)
 
 	def get_bpp(self):
 	# Get base pair probability matrix from get_conformations() output of
@@ -280,7 +314,10 @@ class Conformation(object):
 	# bpp = [Nbeads x Nbeads] matrix of probabilities (from 0 to 1) that  
 	#                bead i is paired to bead j in the ensemble.
 
-		for q in range(self.x.shape[1]):
+		if not self.evaluated:
+			raise RuntimeError('Not run yet, call .run() for pipeline or .get_conformations() for first step')
+
+		for q in range(self.n_conf):
 			for m in range(self.N):
 				if self.p[m,q] >= 0:
 					self.bpps[m, int(self.p[m,q])] += self.conf_probabilities[q]
@@ -289,8 +326,11 @@ class Conformation(object):
 
 		'''For each conformation, get matrix that describes connectivity:
 		both backbone links and base pairs.'''
+		
+		if not self.evaluated:
+			raise RuntimeError('Not run yet, call .run() for pipeline or .get_conformations() for first step')
 
-		for q in range(self.x.shape[1]):
+		for q in range(self.n_conf):
 
 			new_mat = np.zeros([self.N, self.N])
 
@@ -303,7 +343,7 @@ class Conformation(object):
 				if self.p[m,q] >= 0:
 					new_mat[m, int(self.p[m,q])] += 1
 
-		self.connectivity_matrices.append(new_mat)
+			self.connectivity_matrices.append(new_mat)
 
 
 
