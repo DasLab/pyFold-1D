@@ -22,3 +22,4 @@ unittests -> tests (incomplete), not updated to class structure yet
 
 Renamed input vec 'partner' to 'constraint' to distinguish it as an initial input from the p arrays.
 
+Unit tests not up to date with class organization yet, but demo.ipynb replicates some of the tests from the MATLAB dir.
