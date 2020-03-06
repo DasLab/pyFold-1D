@@ -1,3 +1,4 @@
 hws_scratch.ipynb
 __pycache__/*
 .ipynb_checkpoints/*
+utils/__pycache__/*
