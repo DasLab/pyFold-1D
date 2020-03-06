@@ -1,6 +1,6 @@
-# ToyFold-1D (in python)
+# ToyFold-1D (aka pyFold?)
 
-Translated from Rhiju Das' Toyfold-1D in matlab, aiming to conserve code syntax / variable names / function names as much as possible. Docstrings mostly blatant plagiarizations!
+Translated from Rhiju Das' Toyfold-1D in MATLAB, aiming to conserve code syntax / variable names / function names as much as possible. Docstrings mostly blatant plagiarizations!
 
 ## some implementation notes:
 
