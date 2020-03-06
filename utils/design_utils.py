@@ -10,7 +10,7 @@ def complement_to_(string):
 def get_nts_for_symbol(s):
 # Returns, e.g., 'ACGU' for 'N'
 
-	if s in ['A','G','C','U']:
+	if s in ['A','G','C','U',',','+',' ','&']:
 		return [s]
 	elif s=='R':
 		return ['A','G']
@@ -38,8 +38,7 @@ def check_pair(s1, s2):
 #
 # Output
 #  ok = are they pairable in Toyfold model?
-
-	return (''.join([s1,s2]) in ['AU','UA','CG','CG'])
+	return (''.join([s1,s2]) in ['AU','UA','CG','GC'])
 
 def get_sequences_for_pattern(pattern):
 # get list of all possible sequences consistent with design pattern.
@@ -99,43 +98,4 @@ def filter_by_secstruct(sequences, secstruct):
 		if ok:
 			ok_sequences.append(sequence)
 	return ok_sequences
-
-def test_design(sequence, secstruct, params=None):
-	# Main script for testing if a sequence folds well into target 
-	#   secondary structure.
-	#
-	# Inputs
-	#  sequence  = sequence like 'AAACCCGGA'
-	#  secstruct = target secondary structure in dot parens notation
-	#  params = Energy parameter values for delta, epsilon, etc. [MATLAB struct]
-	
-	# Output
-	#  p_target = Fraction of conformations with target 
-	#                secondary structure. (Higher is better.)
-	#  x = [Nbeads x Nconformations] all sets of conformations.
-	#        If there are no base pairs specified, should get
-	#        2^(Nbeads-1). First position is always 0.   
-	#  d = [Nbeads x Nconformations] input directions (array of +/-1's)
-	#  p = [Nbeads x Nconformations] partners  (0 if bead is unpaired,
-	#        otherwise index of partner from 1,... Nbeads )
-
-
-	#TODO: make this a function that calls classes for each
-
-	if params is None:
-		params = Parameters()
-
-	x,d,p, _ = get_conformations('', sequence) # params lol
-
-	Z = get_Z(x,d,p,params)
-
-	x_target, d_target, p_target, _ = get_conformations(secstruct, sequence, params)
-
-	Z_target = get_Z(x_target, d_target, p_target, params)
-
-	p_target = Z_target/Z
-
-	return p_target, x, d, p
-
-
 
