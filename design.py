@@ -82,12 +82,12 @@ class Design(object):
 
 	def test(self):
 
+		print('Found %d sequences to test' % len(self.sequences))
+
 		for sequence in self.sequences:
 			p_target_i, base_mdl = self.test_design_(sequence)
 			self.target_probabilities.append(p_target_i)
 			self.conformations.append(base_mdl)
-
-		print('Found %d sequences to test' % len(self.sequences))
 
 		idx = np.argsort([-1*x for x in self.target_probabilities]) # to sort highest to lowest
 		self.target_probabilities = [self.target_probabilities[x] for x in idx]

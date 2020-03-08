@@ -2,12 +2,25 @@ import matplotlib.pyplot as plt
 import numpy as np
 import seaborn as sns
 
-def draw_conformations(conf, structs_per_row = 5):
+
+def draw_conformations(conf, n_confs = None, structs_per_row = 5):
+    '''
+    Draw all conformations from model.
+
+    Input: conf: Conformation class
+    n_confs: number of top-scored conformations to draw.
+    structs_per_row: number of plots to include per row.
+
+    '''
+
     n_beads = conf.x.shape[0]
-    n_confs = conf.x.shape[1]
+
+    if n_confs is None or n_confs > conf.x.shape[1]:
+        n_confs = conf.x.shape[1]
+
     for i in range(n_confs):
         
-        plt.subplot(int(n_confs / structs_per_row)+1, structs_per_row, i+1)
+        if n_confs > 1: plt.subplot(int(n_confs / structs_per_row)+1, structs_per_row, i+1)
 
         plt.plot(conf.x[:,i], c='k')
 
@@ -30,14 +43,16 @@ def draw_conformations(conf, structs_per_row = 5):
         plt.axhline(0,c='grey',linewidth=0.5)
         plt.axis('off')
 
-def draw_traces(conf, boltz_weight=False):
+def draw_traces(conf, n_confs = None, boltz_weight=False):
     n_beads = conf.x.shape[0]
-    n_confs = conf.x.shape[1]
-    
+    if n_confs is None or n_confs > conf.x.shape[1]:
+        n_confs = conf.x.shape[1]
+
+
     min_E = np.min(conf.energies)
     for i in range(n_confs):
         if boltz_weight:
-            wt = np.exp(-0.01*(conf.energies[i]+min_E))
+            wt = np.exp(-0.005*(conf.energies[i]+min_E))
         else:
             wt=1
         plt.plot(conf.x[:,i]+np.random.normal(scale=0.1,size=n_beads), linewidth=wt, c='k', alpha=0.5)
@@ -46,7 +61,7 @@ def draw_traces(conf, boltz_weight=False):
                 if j_ind > j:
                     plt.plot([j, j_ind],[conf.x[j_ind,i],conf.x[j_ind,i]], c='blue', linewidth=wt, alpha=0.5)
 
-    plt.axis('off')
+    #plt.axis('off')
 
 def plot_seqlogo(sequences):
     '''sequences: list of sequences'''
