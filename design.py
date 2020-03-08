@@ -7,34 +7,43 @@ from conformation import Conformation
 class Design(object):
 
 	def __init__(self, secstruct = None, pattern = None, params = None):
+		'''
+	    Enumerate over all sequences that could form target secondary
+	    structure (and conform to optional design pattern) and see which ones
+	    fold best.
+		
+		Inputs
+		secstruct (str): Target secondary structure in dot-parens notation, e.g.
+		                '((.))'. If a list of structures, will treat the structure as a switch [coming].
+		
+		pattern (str) (optional): Sequence like AANUU, where characters like 
+		               N,R,Y,W, and S are wild cards, and A,U,C, and G are preserved.
+		               If not specified, code will use ANNNNNN... (note that
+		               first base can be set to A without loss of generality in
+		               current energy model)
+		
+		params (Parameters class): custom parameter values.
+			If designing switches! pass a list of params classes that describe the energy models used 
+			for each switch state. [coming]
 
-		#   Enumerate over all sequences that could form target secondary
-		#    structure (and conform to optional design pattern) and see which ones
-		#    fold best.
-		#
-		# Inputs
-		# secstruct = Target secondary structure in dot-parens notation, e.g.
-		#                 '((.))'. Give [] or '' if you want
-		#                  the secondary structures to be enumerated
-		# pattern = [Optional] sequence like AANUU, where characters like 
-		#                N,R,Y,W, and S are wild cards, and A,U,C, and G are preserved.
-		#                If not specified, code will use ANNNNNN... (note that
-		#                first base can be set to A without loss of generality in
-		#                current energy model)
-		#  params = Energy parameter values for delta, epsilon, etc. [MATLAB struct]
-		#
-		#
-		# Outputs
-		# sequences = all sequences that match secstruct and pattern, ordered
-		#              with 'best' design (by p_target) first
-		# p_target  = For each sequence, fraction of conformations with target 
-		#                secondary structure.
-		# x = For each sequence, all sets of conformations.
-		#        If there are no base pairs specified, should get
-		#        2^(Nbeads-1). First position is always 0.   
-		# d = For each sequence, input directions (array of +/-1's)
-		# p = For each sequence, partners  (0 if bead is unpaired,
-		#        otherwise index of partner from 1,... Nbeads )
+		To evaluate model: call run()
+		
+		Attributes
+		sequences (list): All sequences that match secstruct and pattern, ordered
+		             with 'best' design (by p_target) first
+		target_probabilities  (list): For each sequence, fraction of conformations with target 
+		               secondary structure.
+		conformations (list of Conformation objects): Conformation objects for each sequence.
+
+		Functions
+
+		run()
+		filter_sequence()
+		score()
+		test()
+		test_design_()
+		plot_best_and_worst()
+		'''
 
 		if params:
 			self.params = params
@@ -95,23 +104,11 @@ class Design(object):
 		self.conformations = [self.conformations[x] for x in idx]
 
 	def test_design_(self, sequence):
-		# Main script for testing if a sequence folds well into target 
-		#   secondary structure.
-		#
-		# Inputs
-		#  sequence  = sequence like 'AAACCCGGA'
-		#  secstruct = target secondary structure in dot parens notation
-		#  params = Energy parameter values for delta, epsilon, etc. [MATLAB struct]
-		
-		# Output
-		#  p_target = Fraction of conformations with target 
-		#                secondary structure. (Higher is better.)
-		#  x = [Nbeads x Nconformations] all sets of conformations.
-		#        If there are no base pairs specified, should get
-		#        2^(Nbeads-1). First position is always 0.   
-		#  d = [Nbeads x Nconformations] input directions (array of +/-1's)
-		#  p = [Nbeads x Nconformations] partners  (0 if bead is unpaired,
-		#        otherwise index of partner from 1,... Nbeads )
+		'''
+		Determine probability that sequence folds into target secondary structure.
+
+		Inputs: sequence  = sequence like 'AAACCCGGA'
+		'''
 
 		base_mdl = Conformation(secstruct= None, sequence = sequence, params = self.params)
 		target_mdl = Conformation(secstruct= self.secstruct, sequence = sequence, params = self.params)
@@ -124,6 +121,10 @@ class Design(object):
 		return p_target, base_mdl
 
 	def plot_best_and_worst(self):
+		'''
+		Plot base pair probability matrix of best and worst found design.
+		'''
+
 		plt.subplot(1,2,1)
 		plt.imshow(self.conformations[0].bpps,cmap='gist_heat_r')
 		plt.title('Best design\n %s \n prob = %.3f' % (self.sequences[0], self.target_probabilities[0]))

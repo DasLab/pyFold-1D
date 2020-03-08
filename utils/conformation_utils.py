@@ -3,6 +3,11 @@ import numpy as np
 from copy import copy
 
 def find_all(s, ch):
+	'''
+	If ch is single character, finds all occurences of character in string s.
+	If ch is a list, finds all occurences of all items in list.
+	'''
+
 	if isinstance(ch, list):
 		tmp_list=[]
 		for c in ch:
@@ -161,7 +166,6 @@ def parse_stems_from_bps(bps, debug=False):
 
 			#Check inward
 			for i in range(bp[0],nres+1):
-
 
 				bp_next[0] = copy(bp_next)[0]+1
 				bp_next[1] = copy(bp_next)[1]-1

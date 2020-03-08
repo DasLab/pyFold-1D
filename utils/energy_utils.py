@@ -1,8 +1,9 @@
 import numpy as np
+from conformation_utils import find_all
 
 class Parameters(object):
 
-	def __init__(self, epsilon=-2, delta=1, sigma=-1, gnm=True):
+	def __init__(self, epsilon=-2, delta=1, sigma=-1, gnm=True, motifs=None):
 		'''
 		Class to hold energy parameters for Toyfold-1D model.
 
@@ -11,12 +12,70 @@ class Parameters(object):
 		epsilon: bonus for base pairs (default -2)
 		sigma:  bonus for stacking (default -1)
 		gnm (bool): include free energy calculation for gaussian-network-model fluctuations. (how to normalize?)
+		motifs (list): list of Motif objects to include in scoring. 
+						Example: `motifs=[Motif('((x))', dG=-1)]`
 		'''
 
 		self.epsilon = epsilon
 		self.delta = delta
 		self.sigma = sigma
 		self.gnm = gnm
+
+		self.motifs=[]
+
+		if motifs is not None:
+			for M in motifs:
+				self.motifs.append(M)
+
+
+class Motif(object):
+	def __init__(self, secstruct, dG=-1):
+		'''
+		Class to hold energy motifs, can be used for ligand aptamers, etc.
+		Note that this uses the syntax 'x'=unpaired, '.'=unspecified.
+		Can use any of ' ,+&' to specify chainbreaks.
+
+		Example: toy hairpin (like MS2): Motif('((x))',dG=-2))
+				 toy FMN aptamer: Motif('(x(&)x)',dG=-2)
+
+		Inputs:
+		motif: secondary structure string.
+		dG: energy (negative for bonus, positive for penalty) to assign to the motif.
+		'''
+
+		if secstruct is None:
+			raise RuntimeError('Motif class requires a dot-parens secstruct input.')
+		self.secstruct = secstruct
+		self.dG = dG
+
+def score_motif(dbn_strings, motif_string):
+	'''
+	Given dot-parens strings of conformations, score motif by counting occurences.
+	Input:
+	list of dbn-type strings.
+	Output:
+	list of motif counts.
+	'''
+	motif_counts=[]
+
+	delimiters = [' ','+',',','&']
+	if len(find_all(motif_string),[' ','+',',','&']) == 0:
+		# no chainbreaks
+		motif_strings = [motif_string]
+	else:
+		delim_ctr = 0
+		while motif_string.find(delimiters[delim_ctr]) == -1:
+			delim_ctr +=1
+		motif_strings = motif_string.split(delimiters[delim_ctr])
+
+	for string in dbn_strings:
+		motif_subcounts = []
+		for motif_string in motif_strings:
+			motif_subcounts.append(find_all(string, motif_string))
+		if all(np.diff(motif_subcounts) == 0): # all motif substrings have the same count
+			motif_counts.append(motif_subcounts[0])
+
+	return motif_counts
 
 def score_bends(d):
 
