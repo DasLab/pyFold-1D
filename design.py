@@ -41,7 +41,7 @@ class DesignSwitch(object):
 
 class Design(object):
 
-	def __init__(self, secstruct = None, pattern = None, params = None, n_switch_states=0):
+	def __init__(self, secstruct = None, pattern = None, params = None, n_switch_states=0, score_function=None):
 		'''
 	    Enumerate over all sequences that could form target secondary
 	    structure (and conform to optional design pattern) and see which ones
@@ -87,10 +87,16 @@ class Design(object):
 
 		if self.n_switch_states > 0:
 			# switch design mode!
+
+			if score_function is None:
+				raise RuntimeError('Error: n_switch_states > 0 but no score function was input.')
+			else:
+				self.score_function = score_function
 			if params:
 				if len(params) != self.n_switch_states:
 					raise RuntimeError('Error: Length of parameter list does not match n_switch_states.')
 				self.params = params
+
 			else:
 				self.params = [Parameters()]*self.n_switch_states # same default parameters for each state.
 																  # probably not what you want.
@@ -106,7 +112,7 @@ class Design(object):
 		else:
 			if isinstance(secstruct,list):
 
-				if len(params) != self.n_switch_states:
+				if len(secstruct) != self.n_switch_states:
 					raise RuntimeError('Error: length of secstruct list does not match n_switch_states.')
 
 				# switch design mode!
@@ -116,21 +122,23 @@ class Design(object):
 					is_chainbreak_tmp, secstruct_tmp = parse_out_chainbreak(s)
 					self.secstruct.append(secstruct_tmp)
 					self.is_chainbreak = is_chainbreak_tmp
+
+				self.N = len(self.secstruct[0])
+
+				assert(all( [len(s) == self.N for s in self.secstruct] ))
+
 			else:
 				self.is_chainbreak, self.secstruct = parse_out_chainbreak(secstruct)
+				self.N = len(self.secstruct)
 
 		if pattern is None:
 			patt = ['A']
 			
-			self.pattern = ''.join(['A']+['N']*(len(self.secstruct)-1))
+			self.pattern = ''.join(['A']+['N']*(self.N-1))
 		else:
 			self.pattern = pattern
 
-		if isinstance(self.secstruct, list):
-			assert(len(self.pattern) == len(self.secstruct[0]))
-
-		else:
-			assert(len(self.pattern) == len(self.secstruct))
+		assert(len(self.pattern) == self.N)
 
 		self.sequences = []
 		self.conformations = []
@@ -146,11 +154,25 @@ class Design(object):
 
 	def filter_sequences(self):
 		sequences = get_sequences_for_pattern(self.pattern)
-		bps = convert_structure_to_bps(self.secstruct)
+
+		if self.n_switch_states == 0:
+
+			# not a switch
+			bp_list = convert_structure_to_bps(self.secstruct)
+
+		else:
+			bp_list=[] 
+
+			# get bps across all switch structs
+			for s in self.secstruct:
+				tmp_list = convert_structure_to_bps(s)
+
+				# don't add bps already in list
+				bp_list.extend([x for x in tmp_list if x not in bp_list])
 
 		for seq in sequences:
 			ok=True
-			for [i, j] in bps:
+			for [i, j] in bp_list:
 				if not check_pair(seq[i], seq[j]):
 					ok = False
 					break
@@ -171,8 +193,9 @@ class Design(object):
 		else:
 			# score switches
 			for sequence in self.sequences:
-				switch_score_i = self.test_design_switch_(sequence)
+				switch_score_i, mdl = self.test_design_switch_(sequence)
 				self.scores.append(switch_score_i)
+				self.conformations.append(mdl) #Todo: figure out how to handle Conf classes for switches
 
 		idx = np.argsort([-1*x for x in self.scores]) # to sort highest to lowest
 		self.scores = [self.scores[x] for x in idx]
@@ -202,15 +225,10 @@ class Design(object):
 
 		Z_list = []
 		for s_ind in range(self.n_switch_states):
-			mdl = Conformation(secstruct= self.secstruct[s_ind], 
-				sequence = sequence, params = self.params[s_ind])
+			mdl = Conformation(secstruct = self.secstruct[s_ind], sequence = sequence, params = self.params[s_ind])
 			mdl.run()
-			state_mdls.append(mdl)
 			Z_list.append(mdl.Z)
-
-			# TODO: score switch based on Z values in Z_list
-
-		return score
+		return self.score_function(*Z_list), mdl #TODO: sort out how to store conformations for switches
 
 	def plot_best_and_worst(self):
 		'''
@@ -219,11 +237,11 @@ class Design(object):
 
 		plt.subplot(1,2,1)
 		plt.imshow(self.conformations[0].bpps,cmap='gist_heat_r')
-		plt.title('Best design\n %s \n prob = %.3f' % (self.sequences[0], self.scores[0]))
+		plt.title('Best design\n %s \n score = %.3f' % (self.sequences[0], self.scores[0]))
 
 		plt.subplot(1,2,2)
 		plt.imshow(self.conformations[-1].bpps,cmap='gist_heat_r')
-		plt.title('Worst design\n %s \n prob = %.3f' % (self.sequences[-1], self.scores[-1]))
+		plt.title('Worst design\n %s \n score = %.3f' % (self.sequences[-1], self.scores[-1]))
 
 
 

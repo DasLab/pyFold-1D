@@ -283,7 +283,7 @@ class Conformation(object):
 
 		if len(self.params.motifs) > 0:
 			for motif in self.params.motifs:
-				self.energies += motif.dG*score_motifs(self.dbn_strings, motif.secstruct)
+				self.energies += motif.dG*score_motif(self.dbn_strings, motif.secstruct)
 
 		self.Z = np.sum(np.exp(-1*self.energies))
 		self.conf_probabilities = np.exp(-self.energies)/self.Z

@@ -6,15 +6,25 @@ def find_all(s, ch):
 	'''
 	If ch is single character, finds all occurences of character in string s.
 	If ch is a list, finds all occurences of all items in list.
+
+	Inefficient but (if input is string) will get all (even overlapping) matches (good for motifs)
 	'''
 
-	if isinstance(ch, list):
-		tmp_list=[]
-		for c in ch:
-			tmp_list.extend([i for i, ltr in enumerate(s) if ltr == c])
-		return tmp_list
-	elif isinstance(ch, str):
-		return [i for i, ltr in enumerate(s) if ltr == ch]
+	if isinstance(s, str):
+		if isinstance(ch, list):
+			tmp_list=[]
+			for c in ch:
+				tmp_list.extend([i for i in range(len(s)) if s.startswith(c, i)])
+			return tmp_list
+		elif isinstance(ch, str):
+			return [i for i in range(len(s)) if s.startswith(ch, i)]
+
+	elif isinstance(s, list):
+		if isinstance(ch, list):
+			tmp_list=[]
+			for c in ch:
+				tmp_list.extend([i for i, ltr in enumerate(s) if ltr == c])
+			return tmp_list
 
 def parse_out_chainbreak(secstruct):
 	secstruct_new = []

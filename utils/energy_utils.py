@@ -1,5 +1,5 @@
 import numpy as np
-from conformation_utils import find_all
+from utils.conformation_utils import find_all
 
 class Parameters(object):
 
@@ -48,7 +48,7 @@ class Motif(object):
 		self.secstruct = secstruct
 		self.dG = dG
 
-def score_motif(dbn_strings, motif_string):
+def score_motif(dbn_strings, motif_string, debug=False):
 	'''
 	Given dot-parens strings of conformations, score motif by counting occurences.
 	Input:
@@ -59,7 +59,7 @@ def score_motif(dbn_strings, motif_string):
 	motif_counts=[]
 
 	delimiters = [' ','+',',','&']
-	if len(find_all(motif_string),[' ','+',',','&']) == 0:
+	if len(find_all(motif_string,[' ','+',',','&'])) == 0:
 		# no chainbreaks
 		motif_strings = [motif_string]
 	else:
@@ -69,13 +69,24 @@ def score_motif(dbn_strings, motif_string):
 		motif_strings = motif_string.split(delimiters[delim_ctr])
 
 	for string in dbn_strings:
-		motif_subcounts = []
-		for motif_string in motif_strings:
-			motif_subcounts.append(find_all(string, motif_string))
-		if all(np.diff(motif_subcounts) == 0): # all motif substrings have the same count
-			motif_counts.append(motif_subcounts[0])
 
-	return motif_counts
+		motif_subcounts = []
+		if debug: print('string', string)
+
+		for motif_string in motif_strings:
+			motif_string = motif_string.replace('x','.')
+			if debug: print('motif_string', motif_string)
+			motif_subcounts.append(find_all(string, motif_string))
+
+		if debug: print('motif_subcounts', motif_subcounts)
+
+		if len(motif_subcounts) > 1:
+			if debug: print('more than 1 motif substring')
+			motif_counts.append(np.min([len(m) for m in motif_subcounts]))
+		else:
+			motif_counts.append(len(motif_subcounts[0]))
+
+	return np.array(motif_counts)
 
 def score_bends(d):
 
