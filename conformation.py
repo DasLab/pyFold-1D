@@ -15,23 +15,28 @@ class Conformation(object):
 	have the most pairs and least bends.
 
 	Input:
-		secstruct (str): Secondary structure in dot-parens notation, e.g. '((.))'.
+		secstruct (str): Secondary structure in dot-parens notation, e.g. '((.))'.  For unspecified nts, use '_'.
 		sequence (str) (optional): Input sequence (array of 0's and 1's) with 'colors'.
-			Required if you want secstruct's to be enumerated.
 		params (Parameters class): input custom parameters model (see Parameters doc for how this works.)
 
-	Energy models:
-		''
 	Attributes:
-		x = [Nbeads x Nconformations] all sets of conformations. If no base pairs specified,
+		x: [Nbeads x Nconformations] all sets of conformations. If no base pairs specified,
 		should get 2^(Nbeads - 1). First position is always 0.
 
-		d = [Nbeads x Nconformations] Input directions (array of +/-1's)
+		d: [Nbeads x Nconformations] Input directions (array of +/-1's)
 
-		p = [Nbeads x Nconformations] partners (-1 if bead is unpaired,
+		p: [Nbeads x Nconformations] partners (-1 if bead is unpaired,
 		 otherwise index of partner from 0, ... Nbeads-1)
 
-		E = [Nconformations] Energies for each conformation.
+		energies: [Nconformations] Energies for each conformation.
+		bpps: [Nbeads x Nbeads array] equilibrium-average base pair probability matrix.
+		connectivity_matrices: list of arrays [Nbeads x Nbeads]: connectivity matrices used for GNM energy calculation
+			(can be used down the line for visualization)
+		evaluated (bool): True if enumeration sequence has been performed, False otherwise
+		n_conf (int): number of conformations found
+		dbn_strings: list of dot-bracket strings for each conformation found
+		stems_list: list of (list of bps) (aka stems) for each conformation
+
 	'''
 
 	def __init__(self, secstruct=None, sequence=None, params=None):
@@ -44,11 +49,6 @@ class Conformation(object):
 		if secstruct is not None:
 
 			self.is_chainbreak, self.secstruct = parse_out_chainbreak(secstruct)
-
-			#renamed partner to constraint to distinguish from p array.  as this is more an input constraint
-			self.constraint = secstruct_to_partner(self.secstruct)
-			self.stem_assignment = figure_out_stem_assignment(self.secstruct)
-
 			self.N = len(self.secstruct)
 
 			if sequence is not None:
@@ -57,6 +57,8 @@ class Conformation(object):
 				assert (is_chainbreak_sequence == self.is_chainbreak) #breaks in design for multisequence things?
 
 				assert(len(self.sequence) == len(self.secstruct))
+			else:
+				self.sequence = 'N'*self.N
 
 		else: # no secstruct provided
 
@@ -64,12 +66,12 @@ class Conformation(object):
 				raise RuntimeError("Must input at a minimum a secstruct or a sequence")
 
 			else: #sequence, no secstruct
-			
 				self.is_chainbreak, self.sequence = parse_out_chainbreak(sequence)
-
 				self.N = len(self.sequence)
-				self.constraint = -1*np.ones([self.N])
-				self.stem_assignment = np.zeros([self.N])
+				self.secstruct = '_'*self.N
+
+		#writes self.constraints, self.stem_assignment
+		self.get_starting_constraints()
 
 		self.x = []
 		self.d = []
@@ -84,6 +86,37 @@ class Conformation(object):
 		self.n_conf = 0
 		self.dbn_strings = []
 		self.stems_list = []
+
+	def get_starting_constraints(self):
+		''' 
+		Writes self.constraints and self.stem_assignment.
+	    -1 if forced to be unpaired, Nan if unspecified.
+	    Otherwise self.constraints: assigned stem 1 to max(N_stems)
+		Note sem_assignments not switched to zero-indexing for python version, unlike constraints syntax.
+		'''
+
+		self.constraint = -1*np.ones([self.N]) 
+		self.stem_assignment = -1*np.ones([self.N])
+
+		bps = convert_structure_to_bps(self.secstruct)
+		unspecified = get_unspecified_spots(self.secstruct)
+		stems = parse_stems_from_bps(bps)
+
+		for (i,j) in bps:
+			self.constraint[i] = j
+			self.constraint[j] = i
+
+		for i, stem in enumerate(stems):
+			for bp in stem:
+				self.stem_assignment[bp[0]] = i+1
+				self.stem_assignment[bp[1]] = i+1
+
+		for u in unspecified:
+			if self.constraint[u] != -1 or self.stem_assignment[u] != -1:
+				raise RuntimeError('conflicting base pairs and unspecified spot.')
+			else:
+				self.constraint[u] = np.NaN
+				self.stem_assignment[u] = np.NaN
 
 	def run(self):
 		self.get_conformations() # enumerate conformations
@@ -104,7 +137,7 @@ class Conformation(object):
 		self.stems_list = [self.stems_list[x] for x in idx]
 		self.connectivity_matrices = [self.connectivity_matrices[x] for x in idx]
 
-	def get_conformations(self):
+	def get_conformations(self, debug=False):
 
 		# doing x, d, p as local vars and setting to class objs at the end for -laziness- legibility
 		x = np.zeros([self.N,1])
@@ -117,16 +150,27 @@ class Conformation(object):
 		#initialize first bead location
 		x[0,0] = 0
 		d[0,0] = 1
-		p[0,0] = self.constraint[0]
+		p[0,0] = -1 #self.constraint[0]
 
 		for i in range(1,self.N):
 
+			if debug:
+				print('i:', i)
+				print('x\n',x)
+				print('d\n',d)
+				print('p\n',p)
+
+			# This just puts all of them out there unless continuing a stem in the constraints.
 			if not self.is_chainbreak[i-1]:
-				if self.stem_assignment[i] > 0 and self.stem_assignment[i]==self.stem_assignment[i-1]:
+
+				if self.stem_assignment[i] > -1 and self.stem_assignment[i]==self.stem_assignment[i-1]:
 					#continuing a stem. go in same direction
 
 					d[i] = d[i-1]
-				else:
+				else: # case where the next base are either unpaired or unspecified. Will be filtered later
+
+					# this base is unpaired
+
 					q = x.shape[1] # number of conformations enumerated so far
 
 					# Two choices for next move: forward or backward.
@@ -148,8 +192,11 @@ class Conformation(object):
 					p[:,newblock] = copy(p[:,:q])
 					d[i, newblock] = -1
 				x[i] = x[i-1]+d[i]
-				p[i] = self.constraint[i]
+				if np.isnan(self.constraint[i]): # assume its unpaired for now
+					p[i] = -1
 
+				else:
+					p[i] = self.constraint[i]
 			else:
 				q = x.shape[1]
 
@@ -174,16 +221,28 @@ class Conformation(object):
 						
 						x[i,newblock] = xx
 						d[i,newblock] = dd
-						p[i,newblock] = self.constraint[i]
 
-			if np.sum(self.stem_assignment) > 0:
-				# Filter trajectories that obey user-inputted pairs: positions at same level
-				#going in opposite directions
-				if self.constraint[i] == -1:
-					continue
-				elif self.constraint[i] > i:
+						if np.isnan(self.constraint[i]): # assume its unpaired for now
+							p[i,newblock] = -1
+
+						else:
+							p[i,newblock] = self.constraint[i]
+
+			# Now we filter based on constraints either in sequence or lack thereof in constraints.
+			# Filter trajectories that obey user-inputted pairs: positions at same level
+			# going in opposite directions
+
+			if debug: print(self.constraint[i])
+
+			if self.constraint[i] == -1:
+				continue
+
+			elif self.constraint[i] > -1:
+
+				if self.constraint[i] > i:
 					continue
 				else:
+					# we have a constraint
 					gp_x = np.where(x[i] == x[int(self.constraint[i])])
 					gp_d = np.where(d[i] == -1*d[int(self.constraint[i])])
 					gp = np.intersect1d(gp_x, gp_d)
@@ -192,22 +251,25 @@ class Conformation(object):
 					d = d[:,gp]
 					p = p[:,gp]
 
-			else:
+			elif np.isnan(self.constraint[i]):
 				# Enumerate secondary structures by figuring out possible partners of the new bead
 				# with any previously positioned beads
 				# Just using for loop now
 
 				# This all is really ugly in python translation, vectorizing will be nicer
 
-				assert(all(p[i]==-1))
+				#assert(all(p[i]==-1))
 
 				xnew = [] # hacky initialization, see below
 
 				for m in range(x.shape[1]):
 
+					if debug: print('m',m)
 					xm = copy(x[:,m])
 					dm = copy(d[:,m])
 					pm = copy(p[:,m])
+
+					if debug: print(pm)
 
 					#no partner for bead i
 
@@ -242,6 +304,7 @@ class Conformation(object):
 							partners.append(s)
 
 					partners = list(set(partners))
+					if debug: print('partners', partners)
 
 					for pp in partners:
 						pm = copy(p[:,m])

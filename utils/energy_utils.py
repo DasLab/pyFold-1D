@@ -3,7 +3,7 @@ from utils.conformation_utils import find_all
 
 class Parameters(object):
 
-	def __init__(self, epsilon=-2, delta=1, sigma=-1, gnm=True, motifs=None):
+	def __init__(self, epsilon=-2, delta=1, sigma=-1, gnm=False, motifs=None):
 		'''
 		Class to hold energy parameters for Toyfold-1D model.
 

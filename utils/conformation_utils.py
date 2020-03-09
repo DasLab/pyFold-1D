@@ -40,18 +40,25 @@ def parse_out_chainbreak(secstruct):
 	return is_chainbreak, ''.join(secstruct_new)
 
 def secstruct_to_partner(secstruct):
-	# because python zero-indexes, making unpaired state -1 (like in contrafold)
+	# this might be unused?
+	# because python zero-indexes, making unpaired state -1 and unspecified state NaN.
 
 	is_chainbreak, secstruct = parse_out_chainbreak(secstruct)
 
 	bps = convert_structure_to_bps(secstruct)
-	pairs = -1*np.ones([len(secstruct)]) 
+	unspecified = get_unspecified_spots(secstruct)
+	partner_vec = -1*np.ones([len(secstruct)]) 
 
 	for (i,j) in bps:
-		pairs[i] = j
-		pairs[j] = i
+		partner_vec[i] = j
+		partner_vec[j] = i
 
-	return pairs
+	for u in unspecified:
+		if partner_vec[u] != -1:
+			raise RuntimeError('conflicting base pairs and unspecified spot.')
+		else:
+			partner_vec[u] = np.NaN
+	return partner_vec
 
 def partner_to_bp_list(p):
 	# given partner-style array, write list of base pairs.
@@ -97,12 +104,18 @@ def write_dbn_from_partner(p, debug=False):
 
 		return ''.join(dbn)
 
+def get_unspecified_spots(secstruct, unspecified_symbol='_'):
+	'''Making the executive decision to use '_' for unspecified
+	 and '.' for unpaired. I don't like the 'x' for unpaired.'''
+
+	return find_all(secstruct,'_')
+
 def convert_structure_to_bps(secstruct):
 
 	bps = []
 
 	#Find other delimiters
-	other_delimiters = [k for k in Counter(secstruct).keys() if k not in ".()[]{}"]
+	other_delimiters = [k for k in Counter(secstruct).keys() if k not in ".()[]{}_"]
 
 	for delim in other_delimiters:
 		pos = find_all(secstruct, delim)
@@ -194,35 +207,6 @@ def parse_stems_from_bps(bps, debug=False):
 			if debug: print('stem', stem)
 	if debug: print('stems', stems)
 	return stems
-
-def figure_out_stem_assignment(secstruct):
-	'''Returns vector length N_beads, 0 if not in a stem, otherwise assigned stem 1 to max(N_stems)
-	Note basically not switched to zero-indexing for python version, unlike partner syntax'''
-
-	is_chainbreak, secstruct = parse_out_chainbreak(secstruct)
-
-	if not secstruct[0].isdigit():
-		bps = convert_structure_to_bps(secstruct)
-
-	else: # assume partner vector was given
-		partner = secstruct
-		bps = []
-		for i in range(len(partner)):
-			if partner[i] > i:
-				bps.append([i, partner[i]])
-
-	stems = parse_stems_from_bps(bps)
-
-	stem_assignment = np.zeros([len(secstruct)])
-
-	for i, stem in enumerate(stems):
-		for bp in stem:
-			stem_assignment[bp[0]] = i+1
-			stem_assignment[bp[1]] = i+1
-
-	return stem_assignment
-
-
 
 
 
